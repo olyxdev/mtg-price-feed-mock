@@ -2,6 +2,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Install build dependencies for better-sqlite3
+RUN apk add --no-cache python3 make g++ 
+
 # Copy package files
 COPY package*.json ./
 
@@ -10,6 +13,9 @@ RUN npm ci --only=production
 
 # Copy application code
 COPY . .
+
+# Pre-fetch Scryfall data during build
+RUN node scripts/fetch-scryfall-data.js || echo "Scryfall fetch failed, will use fallback"
 
 # The port will be set by Render via PORT env variable
 EXPOSE 3000
