@@ -8,7 +8,3 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 3000
-    domains:
-      - mtg-prices-mock.valoryx.nl

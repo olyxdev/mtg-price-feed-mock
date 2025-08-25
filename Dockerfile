@@ -11,12 +11,12 @@ RUN npm ci --only=production
 # Copy application code
 COPY . .
 
-# Expose port
+# The port will be set by Render via PORT env variable
 EXPOSE 3000
 
-# Health check
+# Health check - uses the PORT env variable or defaults to 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {r.statusCode === 200 ? process.exit(0) : process.exit(1)})"
+  CMD node -e "const port = process.env.PORT || 3000; require('http').get('http://localhost:' + port + '/health', (r) => {r.statusCode === 200 ? process.exit(0) : process.exit(1)})"
 
 # Run the application
 CMD ["node", "server.js"]
