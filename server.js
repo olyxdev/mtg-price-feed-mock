@@ -3,13 +3,10 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const compression = require('compression');
-const DataGenerator = require('./src/dataGenerator');
+const priceDatabase = require('./src/priceDatabase');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Initialize data generator
-const dataGenerator = new DataGenerator();
 
 // Middleware
 app.use(cors());
@@ -63,7 +60,7 @@ app.get('/feed/latest', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 100, 1000);
   
   try {
-    const prices = dataGenerator.generatePriceData(limit);
+    const prices = priceDatabase.getLatestPrices(limit);
     
     res.json({
       prices,
@@ -83,10 +80,10 @@ app.get('/feed/latest', (req, res) => {
 
 // GET /feed/bulk endpoint with streaming
 app.get('/feed/bulk', (req, res) => {
-  const BATCH_SIZE = 1000;
-  const TOTAL_RECORDS = 50000;
-  
   try {
+    // Get all bulk data at once (already generated and consistent)
+    const bulkData = priceDatabase.getBulkData();
+    
     // Set headers for streaming JSON
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Transfer-Encoding', 'chunked');
@@ -94,39 +91,25 @@ app.get('/feed/bulk', (req, res) => {
     // Start JSON response
     res.write('{"prices":[');
     
-    let recordsSent = 0;
     let isFirst = true;
+    const BATCH_SIZE = 1000;
     
-    // Generate and stream data in batches
-    const streamBatch = () => {
-      const remaining = TOTAL_RECORDS - recordsSent;
-      const batchSize = Math.min(BATCH_SIZE, remaining);
+    // Stream data in batches
+    for (let i = 0; i < bulkData.length; i += BATCH_SIZE) {
+      const batch = bulkData.slice(i, Math.min(i + BATCH_SIZE, bulkData.length));
       
-      if (batchSize === 0) {
-        // Finish the JSON response
-        res.write('],"metadata":{"generated_at":"' + new Date().toISOString() + '","count":' + TOTAL_RECORDS + '}}');
-        res.end();
-        return;
-      }
-      
-      // Generate batch of data
-      const batch = dataGenerator.generateBulkData(batchSize);
-      
-      // Write batch to response
       batch.forEach(record => {
         if (!isFirst) {
           res.write(',');
         }
         res.write(JSON.stringify(record));
         isFirst = false;
-        recordsSent++;
       });
-      
-      // Continue with next batch
-      setImmediate(streamBatch);
-    };
+    }
     
-    streamBatch();
+    // Finish the JSON response
+    res.write('],"metadata":{"generated_at":"' + new Date().toISOString() + '","count":' + bulkData.length + '}}');
+    res.end();
   } catch (error) {
     console.error('Error generating bulk feed:', error);
     if (!res.headersSent) {

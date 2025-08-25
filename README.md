@@ -4,10 +4,11 @@ A mock API server that simulates real-world Magic: The Gathering card price data
 
 ## Features
 
-- **Dynamic Data Generation**: Uses faker.js and seeded random generation to create realistic MTG card prices
-- **50,000 Historical Records**: Bulk endpoint provides a full year of price history
+- **Persistent Data**: Uses an in-memory database with consistent card IDs and historical data
+- **50,000 Historical Records**: Bulk endpoint provides consistent historical data spanning 1 year
+- **Fixed Card Catalog**: 50 cards with stable IDs for tracking price changes over time
 - **Multiple Price Sources**: Simulates data from tcgplayer, cardmarket, starcitygames, and coolstuffinc
-- **Realistic Price Variations**: Includes volatility, trends, and market manipulation patterns
+- **Realistic Price Evolution**: Prices evolve gradually based on volatility and market trends
 - **Data Quality Issues**: ~5% of data contains intentional corruptions (nulls, negatives, missing fields, etc.)
 - **Rate Limiting**: 100 requests per minute per IP
 - **Performance Simulation**: 50-150ms latency and 1% service unavailability
@@ -128,10 +129,26 @@ The service will be available at: https://mtg-prices-mock.valoryx.nl/feed
 - **Standard Cards**: $5-$50
 - **Commons/Uncommons**: $0.25-$5
 
+## Important Assessment Notes
+
+### Data Consistency
+- **Card IDs are stable**: Each card has a fixed ID that never changes
+- **Historical data is consistent**: The bulk endpoint returns the same historical data
+- **Prices evolve over time**: Latest prices show gradual changes from the historical baseline
+- **Perfect for tracking**: You can track price changes, calculate trends, and detect anomalies
+
+### Card Catalog
+The API uses a fixed set of 50 cards including:
+- Power Nine cards (Black Lotus, Moxen) with IDs like `0e2749a9-c857-4b59`
+- Dual Lands (Underground Sea, Volcanic Island)
+- Modern staples (Ragavan, Force of Negation)
+- Standard cards with varying price ranges
+- Commons and uncommons
+
 ## Technical Details
 
 - **Framework**: Express.js
-- **Data Generation**: faker.js with seeded random generation
+- **Data Storage**: In-memory database with pre-generated historical data
 - **Streaming**: Chunked transfer encoding for bulk endpoint
 - **Rate Limiting**: express-rate-limit
 - **Logging**: Morgan
