@@ -86,3 +86,12 @@ typings/
 
 # DynamoDB Local files
 .dynamodb/
+
+# SQLite database files
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Scryfall cache files
+cache/

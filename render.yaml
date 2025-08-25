@@ -3,8 +3,12 @@ services:
     name: mtg-price-feed-mock
     runtime: docker
     region: frankfurt
-    plan: free
+    plan: starter  # Required for SQLite persistent storage
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+    disk:
+      name: mtg-data
+      mountPath: /app/data
+      sizeGB: 1  # 1GB is enough for our SQLite database

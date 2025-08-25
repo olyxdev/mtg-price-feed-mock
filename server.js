@@ -3,10 +3,14 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const compression = require('compression');
-const priceDatabase = require('./src/priceDatabase');
+const PriceDatabase = require('./src/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Initialize database
+console.log('Initializing database...');
+const db = new PriceDatabase();
 
 // Middleware
 app.use(cors());
@@ -60,7 +64,7 @@ app.get('/feed/latest', (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 100, 1000);
   
   try {
-    const prices = priceDatabase.getLatestPrices(limit);
+    const prices = db.getLatestPrices(limit);
     
     res.json({
       prices,
@@ -70,10 +74,10 @@ app.get('/feed/latest', (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error generating latest feed:', error);
+    console.error('Error fetching latest feed:', error);
     res.status(500).json({
       error: 'Internal Server Error',
-      message: 'Failed to generate price data'
+      message: 'Failed to fetch price data'
     });
   }
 });
@@ -81,8 +85,8 @@ app.get('/feed/latest', (req, res) => {
 // GET /feed/bulk endpoint with streaming
 app.get('/feed/bulk', (req, res) => {
   try {
-    // Get all bulk data at once (already generated and consistent)
-    const bulkData = priceDatabase.getBulkData();
+    // Get bulk data from database
+    const bulkData = db.getBulkData(50000);
     
     // Set headers for streaming JSON
     res.setHeader('Content-Type', 'application/json');
@@ -111,11 +115,11 @@ app.get('/feed/bulk', (req, res) => {
     res.write('],"metadata":{"generated_at":"' + new Date().toISOString() + '","count":' + bulkData.length + '}}');
     res.end();
   } catch (error) {
-    console.error('Error generating bulk feed:', error);
+    console.error('Error fetching bulk feed:', error);
     if (!res.headersSent) {
       res.status(500).json({
         error: 'Internal Server Error',
-        message: 'Failed to generate bulk data'
+        message: 'Failed to fetch bulk data'
       });
     } else {
       res.end();
@@ -138,6 +142,19 @@ app.use((err, req, res, next) => {
     error: 'Internal Server Error',
     message: 'An unexpected error occurred'
   });
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing database connection');
+  db.close();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT signal received: closing database connection');
+  db.close();
+  process.exit(0);
 });
 
 // Start server
