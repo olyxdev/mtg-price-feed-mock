@@ -1,0 +1,27 @@
+{
+  "name": "mtg-price-feed-mock",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "docker:build": "docker build -t mtg-price-feed .",
+    "docker:run": "docker run -p 3000:3000 mtg-price-feed",
+    "docker:compose": "docker-compose up"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@faker-js/faker": "^9.9.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "morgan": "^1.10.1",
+    "seedrandom": "^3.0.5",
+    "uuid": "^11.1.0"
+  }
+}

@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: mtg-price-feed-mock
+    runtime: docker
+    region: frankfurt
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+    domains:
+      - mtg-prices-mock.valoryx.nl
