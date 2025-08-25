@@ -23,4 +23,4 @@ databases:
     databaseName: mtg_prices
     user: mtg_user
     region: frankfurt
-    plan: starter
+    plan: basic-256mb
