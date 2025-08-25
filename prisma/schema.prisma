@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Card {
+  id           String   @id // Scryfall card ID
+  oracleId     String   @map("oracle_id")
+  name         String
+  set          String?
+  setName      String?  @map("set_name")
+  rarity       String
+  basePrice    Float    @map("base_price")
+  volatility   Float
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  
+  prices       Price[]
+  
+  @@index([oracleId])
+  @@index([name])
+  @@map("cards")
+}
+
+model Price {
+  id           String   @id @default(uuid())
+  cardId       String   @map("card_id")
+  oracleId     String   @map("oracle_id")
+  cardName     String   @map("card_name")
+  source       String
+  price        Float?
+  currency     String   @default("USD")
+  timestamp    DateTime
+  volume       Int?
+  isCorrupted  Boolean  @default(false) @map("is_corrupted")
+  createdAt    DateTime @default(now()) @map("created_at")
+  
+  card         Card     @relation(fields: [cardId], references: [id])
+  
+  @@index([timestamp])
+  @@index([cardId])
+  @@index([oracleId])
+  @@index([source])
+  @@index([cardId, source])
+  @@index([cardId, timestamp])
+  @@map("prices")
+}

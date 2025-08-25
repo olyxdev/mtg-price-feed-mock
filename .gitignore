@@ -95,3 +95,5 @@ data/
 
 # Scryfall cache files
 cache/
+
+/src/generated/prisma

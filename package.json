@@ -6,6 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "prisma:seed": "node prisma/seed.js",
+    "prisma:studio": "prisma studio",
     "docker:build": "docker build -t mtg-price-feed .",
     "docker:run": "docker run -p 3000:3000 mtg-price-feed",
     "docker:compose": "docker-compose up"
@@ -15,15 +19,16 @@
   "license": "ISC",
   "dependencies": {
     "@faker-js/faker": "^9.9.0",
-    "better-sqlite3": "^12.2.0",
+    "@prisma/client": "^6.14.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "express-rate-limit": "^8.0.1",
     "morgan": "^1.10.1",
+    "pg": "^8.16.3",
+    "prisma": "^6.14.0",
     "seedrandom": "^3.0.5",
-    "sqlite3": "^5.1.7",
     "uuid": "^11.1.0"
   }
 }

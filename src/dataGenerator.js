@@ -1,342 +1,214 @@
-const { faker } = require('@faker-js/faker');
 const { v4: uuidv4 } = require('uuid');
 const seedrandom = require('seedrandom');
-
-// MTG-themed word combinations for card names
-const MTG_PREFIXES = [
-  'Lightning', 'Thunder', 'Shadow', 'Mystic', 'Ancient', 'Eternal', 'Crimson',
-  'Azure', 'Verdant', 'Golden', 'Silver', 'Dark', 'Light', 'Primal', 'Arcane',
-  'Savage', 'Noble', 'Fallen', 'Rising', 'Forgotten', 'Lost', 'Hidden', 'Forbidden',
-  'Sacred', 'Cursed', 'Blessed', 'Burning', 'Frozen', 'Storm', 'Wind', 'Fire',
-  'Water', 'Earth', 'Death', 'Life', 'Mind', 'Soul', 'Spirit', 'Dream', 'Nightmare',
-  'Chaos', 'Order', 'Balance', 'Void', 'Aether', 'Nether', 'Celestial', 'Infernal',
-  'Eldrazi', 'Phyrexian', 'Mirran', 'Dominarian', 'Ravnican', 'Innistrad'
-];
-
-const MTG_SUFFIXES = [
-  'Bolt', 'Strike', 'Blade', 'Shield', 'Armor', 'Helm', 'Crown', 'Scepter',
-  'Orb', 'Crystal', 'Stone', 'Gem', 'Amulet', 'Ring', 'Staff', 'Wand',
-  'Dragon', 'Phoenix', 'Angel', 'Demon', 'Elemental', 'Beast', 'Warrior',
-  'Wizard', 'Cleric', 'Rogue', 'Knight', 'Assassin', 'Berserker', 'Shaman',
-  'Druid', 'Necromancer', 'Pyromancer', 'Hydromancer', 'Geomancer', 'Aeromancer',
-  'Lotus', 'Mox', 'Signet', 'Talisman', 'Medallion', 'Banner', 'Obelisk',
-  'Monolith', 'Vault', 'Citadel', 'Fortress', 'Tower', 'Gate', 'Bridge',
-  'Ritual', 'Invocation', 'Incantation', 'Enchantment', 'Hex', 'Curse', 'Blessing',
-  'Pact', 'Vow', 'Oath', 'Promise', 'Covenant', 'Treaty', 'Alliance'
-];
-
-const MTG_MIDDLE_WORDS = [
-  'of', 'the', 'of the', 'and', 'and the', 'from', 'from the', 'in', 'in the',
-  'at', 'at the', 'on', 'on the', 'with', 'with the', 'for', 'for the'
-];
-
-const SOURCES = ['tcgplayer', 'cardmarket', 'starcitygames', 'coolstuffinc'];
-
-const RARITIES = [
-  { name: 'common', weight: 50, priceRange: [0.25, 5] },
-  { name: 'uncommon', weight: 30, priceRange: [1, 15] },
-  { name: 'rare', weight: 15, priceRange: [5, 200] },
-  { name: 'mythic', weight: 5, priceRange: [20, 35000] }
-];
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 class DataGenerator {
-  constructor(seed = 'mtg-price-feed') {
-    this.rng = seedrandom(seed);
-    this.cards = this.generateCardPool();
-    this.priceHistory = new Map();
+  constructor() {
+    this.cards = [];
+    this.sources = ['tcgplayer', 'cardmarket', 'starcitygames', 'coolstuffinc'];
+    this.sourceMultipliers = {
+      tcgplayer: 1.0,
+      cardmarket: 0.95,
+      starcitygames: 1.08,
+      coolstuffinc: 1.03
+    };
+    
+    this.loadScryfallCards();
   }
 
-  generateCardPool(count = 1000) {
-    const cards = [];
-    const usedNames = new Set();
+  loadScryfallCards() {
+    const cacheDir = path.join(__dirname, '..', 'cache');
+    const selectedFile = path.join(cacheDir, 'selected-cards.json');
     
-    // Add some famous real cards
-    const famousCards = [
-      { name: 'Black Lotus', rarity: 'mythic', basePrice: 35000, volatility: 0.15 },
-      { name: 'Mox Sapphire', rarity: 'mythic', basePrice: 8500, volatility: 0.12 },
-      { name: 'Underground Sea', rarity: 'rare', basePrice: 4500, volatility: 0.10 },
-      { name: 'Volcanic Island', rarity: 'rare', basePrice: 4200, volatility: 0.10 },
-      { name: 'Force of Will', rarity: 'rare', basePrice: 120, volatility: 0.11 },
-      { name: 'Lightning Bolt', rarity: 'common', basePrice: 2.50, volatility: 0.08 },
-      { name: 'Sol Ring', rarity: 'uncommon', basePrice: 2.50, volatility: 0.06 },
-      { name: 'Ragavan, Nimble Pilferer', rarity: 'mythic', basePrice: 75, volatility: 0.15 },
-      { name: 'Sheoldred, the Apocalypse', rarity: 'mythic', basePrice: 45, volatility: 0.18 },
-      { name: 'The One Ring', rarity: 'mythic', basePrice: 40, volatility: 0.20 }
+    // Check if we have cached Scryfall data
+    if (fs.existsSync(selectedFile)) {
+      try {
+        const selectedCards = JSON.parse(fs.readFileSync(selectedFile, 'utf8'));
+        console.log(`Loaded ${selectedCards.length} cards from Scryfall cache`);
+        
+        this.cards = selectedCards.map(card => ({
+          id: card.id,
+          oracle_id: card.oracle_id,
+          name: card.name,
+          basePrice: card.estimated_price || 1.0,
+          volatility: this.calculateVolatility(card.rarity, card.estimated_price),
+          rarity: card.rarity || 'common',
+          set: card.set || '',
+          set_name: card.set_name || ''
+        }));
+        
+        return;
+      } catch (error) {
+        console.error('Error loading Scryfall cache:', error.message);
+      }
+    }
+    
+    // Fallback to minimal cards if no cache
+    console.log('Using fallback cards (run scripts/fetch-scryfall-data.js to get real cards)');
+    this.cards = [
+      { id: 'fallback-001', oracle_id: 'fallback-001', name: 'Example Rare Card', basePrice: 50, volatility: 0.15, rarity: 'rare' },
+      { id: 'fallback-002', oracle_id: 'fallback-002', name: 'Example Common Card', basePrice: 1, volatility: 0.05, rarity: 'common' },
+      { id: 'fallback-003', oracle_id: 'fallback-003', name: 'Example Mythic Card', basePrice: 100, volatility: 0.20, rarity: 'mythic' },
+      { id: 'fallback-004', oracle_id: 'fallback-004', name: 'Example Uncommon Card', basePrice: 5, volatility: 0.08, rarity: 'uncommon' },
+      { id: 'fallback-005', oracle_id: 'fallback-005', name: 'Example Expensive Card', basePrice: 500, volatility: 0.18, rarity: 'mythic' }
     ];
-
-    famousCards.forEach(card => {
-      cards.push({
-        id: uuidv4().substring(0, 12),
-        ...card
-      });
-      usedNames.add(card.name);
-    });
-
-    // Generate remaining cards procedurally
-    while (cards.length < count) {
-      const name = this.generateCardName(usedNames);
-      if (!name) continue;
-      
-      const rarity = this.selectRarity();
-      const { basePrice, volatility } = this.generatePriceForRarity(rarity);
-      
-      cards.push({
-        id: uuidv4().substring(0, 12),
-        name,
-        rarity,
-        basePrice,
-        volatility
-      });
-      
-      usedNames.add(name);
-    }
-
-    return cards;
   }
 
-  generateCardName(usedNames) {
-    let attempts = 0;
-    while (attempts < 100) {
-      const useMiddle = this.rng() > 0.6;
-      const prefix = MTG_PREFIXES[Math.floor(this.rng() * MTG_PREFIXES.length)];
-      const suffix = MTG_SUFFIXES[Math.floor(this.rng() * MTG_SUFFIXES.length)];
-      
-      let name;
-      if (useMiddle) {
-        const middle = MTG_MIDDLE_WORDS[Math.floor(this.rng() * MTG_MIDDLE_WORDS.length)];
-        name = `${prefix} ${middle} ${suffix}`;
-      } else {
-        name = `${prefix} ${suffix}`;
-      }
-      
-      if (!usedNames.has(name)) {
-        return name;
-      }
-      attempts++;
-    }
-    return null;
+  calculateVolatility(rarity, price) {
+    let volatility = 0.10; // default
+    
+    if (rarity === 'mythic') volatility = 0.18;
+    else if (rarity === 'rare') volatility = 0.14;
+    else if (rarity === 'uncommon') volatility = 0.08;
+    else if (rarity === 'common') volatility = 0.05;
+    
+    // Add variance based on price
+    const priceLog = Math.log10(Math.max(1, price));
+    volatility = volatility * (1 + priceLog * 0.05);
+    
+    return Math.min(0.25, volatility); // Cap at 25%
   }
 
-  selectRarity() {
-    const totalWeight = RARITIES.reduce((sum, r) => sum + r.weight, 0);
-    let random = this.rng() * totalWeight;
+  // Generate deterministic price at a specific time
+  generatePriceAtTime(card, source, timestamp) {
+    const hoursSinceEpoch = Math.floor(timestamp.getTime() / (1000 * 60 * 60));
+    const seed = `${card.id}-${source}-${hoursSinceEpoch}`;
+    const rng = seedrandom(seed);
     
-    for (const rarity of RARITIES) {
-      random -= rarity.weight;
-      if (random <= 0) {
-        return rarity.name;
-      }
-    }
-    return 'common';
-  }
-
-  generatePriceForRarity(rarity) {
-    const rarityConfig = RARITIES.find(r => r.name === rarity);
-    const [min, max] = rarityConfig.priceRange;
+    const sourceMultiplier = this.sourceMultipliers[source];
+    let price = card.basePrice * sourceMultiplier;
     
-    // Use log scale for more realistic price distribution
-    const logMin = Math.log(min);
-    const logMax = Math.log(max);
-    const logPrice = logMin + this.rng() * (logMax - logMin);
-    const basePrice = Math.exp(logPrice);
-    
-    // Higher rarity = higher volatility
-    const volatilityBase = {
-      common: 0.05,
-      uncommon: 0.08,
-      rare: 0.12,
-      mythic: 0.18
-    };
-    
-    const volatility = volatilityBase[rarity] + (this.rng() * 0.05 - 0.025);
-    
-    return {
-      basePrice: Math.round(basePrice * 100) / 100,
-      volatility: Math.max(0.03, Math.min(0.25, volatility))
-    };
-  }
-
-  generatePrice(card, source, timestamp) {
-    const key = `${card.id}-${source}`;
-    
-    // Get or initialize price history for this card-source combination
-    if (!this.priceHistory.has(key)) {
-      // Source price variance (different sources have different prices)
-      const sourceMultiplier = {
-        tcgplayer: 1.0,
-        cardmarket: 0.95,
-        starcitygames: 1.08,
-        coolstuffinc: 1.03
-      };
-      
-      const initialPrice = card.basePrice * sourceMultiplier[source] * (1 + (this.rng() * 0.1 - 0.05));
-      this.priceHistory.set(key, {
-        lastPrice: initialPrice,
-        trend: this.rng() * 0.02 - 0.01, // -1% to +1% trend
-        manipulationEnd: null
-      });
-    }
-    
-    const history = this.priceHistory.get(key);
-    const hoursSinceEpoch = timestamp.getTime() / (1000 * 60 * 60);
-    
-    // Market manipulation simulation (1% chance)
-    if (this.rng() < 0.01 && !history.manipulationEnd) {
-      history.manipulationEnd = hoursSinceEpoch + 24 + this.rng() * 48; // 1-3 days
-      history.manipulationMultiplier = 1.3 + this.rng() * 0.4; // 30-70% spike
-    }
-    
-    // Check if manipulation period ended
-    if (history.manipulationEnd && hoursSinceEpoch > history.manipulationEnd) {
-      history.manipulationEnd = null;
-      history.manipulationMultiplier = 1;
-    }
-    
-    // Calculate price with various factors
-    let priceChange = 0;
+    // Time-based evolution
+    const daysSinceEpoch = timestamp.getTime() / (1000 * 60 * 60 * 24);
+    const longTermTrend = Math.sin(daysSinceEpoch / 30) * 0.1;
+    const shortTermTrend = Math.sin(daysSinceEpoch / 7) * 0.05;
     
     // Random walk
-    priceChange += (this.rng() * 2 - 1) * card.volatility * history.lastPrice * 0.01;
+    const randomWalk = (rng() - 0.5) * card.volatility;
     
-    // Trend component
-    priceChange += history.trend * history.lastPrice * 0.001;
+    // Combine factors
+    price = price * (1 + longTermTrend + shortTermTrend + randomWalk);
+    price = Math.max(0.10, price);
     
-    // Mean reversion
-    const deviation = (history.lastPrice - card.basePrice) / card.basePrice;
-    priceChange -= deviation * 0.002 * history.lastPrice;
-    
-    // Apply manipulation if active
-    if (history.manipulationEnd) {
-      priceChange *= history.manipulationMultiplier;
-    }
-    
-    // Update price
-    let newPrice = history.lastPrice + priceChange;
-    newPrice = Math.max(0.10, newPrice); // Minimum price
-    
-    // Occasionally adjust trend
-    if (this.rng() < 0.05) {
-      history.trend = this.rng() * 0.02 - 0.01;
-    }
-    
-    history.lastPrice = newPrice;
-    
-    return Math.round(newPrice * 100) / 100;
+    return Math.round(price * 100) / 100;
   }
 
   corruptData(data) {
-    const corruption = this.rng();
+    const rng = seedrandom(data.id);
+    const corruption = rng();
     
     if (corruption < 0.2) {
-      // Null price
       data.price = null;
     } else if (corruption < 0.3) {
-      // Negative price
-      data.price = -Math.abs(data.price);
+      data.price = -Math.abs(data.price || 0);
     } else if (corruption < 0.4) {
-      // Missing fields
-      const fields = ['card_id', 'card_name', 'source', 'timestamp'];
-      const fieldToRemove = fields[Math.floor(this.rng() * fields.length)];
-      delete data[fieldToRemove];
+      delete data.card_name;
     } else if (corruption < 0.5) {
-      // Duplicate ID
-      data.id = 'duplicate-' + Math.floor(this.rng() * 100);
+      data.id = 'duplicate-' + Math.floor(rng() * 100);
     } else if (corruption < 0.6) {
-      // Extremely high price (data entry error)
-      data.price = data.price * 1000;
+      data.price = (data.price || 0) * 1000;
     } else if (corruption < 0.7) {
-      // Future timestamp
       const futureDate = new Date();
-      futureDate.setDate(futureDate.getDate() + Math.floor(this.rng() * 30));
+      futureDate.setDate(futureDate.getDate() + Math.floor(rng() * 30));
       data.timestamp = futureDate.toISOString();
     } else if (corruption < 0.8) {
-      // Invalid card_id
-      data.card_id = 'invalid-' + this.rng().toString(36).substring(2, 9);
+      data.card_id = 'invalid-' + rng().toString(36).substring(2, 9);
     } else if (corruption < 0.9) {
-      // Zero volume with high price
       data.volume = 0;
-      data.price = data.price * 10;
-    } else {
-      // Wrong currency
-      data.currency = 'EUR';
+      data.price = (data.price || 0) * 10;
     }
-    
-    return data;
   }
 
-  generatePriceData(count = 100, currentTime = new Date()) {
-    const data = [];
+  generateLatestPrices(limit = 100) {
+    const now = new Date();
+    const prices = [];
     
-    for (let i = 0; i < count; i++) {
-      const card = this.cards[Math.floor(this.rng() * this.cards.length)];
-      const source = SOURCES[Math.floor(this.rng() * SOURCES.length)];
+    // Generate price points with recent timestamps
+    for (let i = 0; i < limit; i++) {
+      // Deterministic selection based on current time
+      const seed = `latest-${now.getTime()}-${i}`;
+      const rng = seedrandom(seed);
       
-      // Generate timestamp within last hour for "latest" feed
-      const minutesAgo = this.rng() * 60;
-      const timestamp = new Date(currentTime.getTime() - minutesAgo * 60 * 1000);
+      const card = this.cards[Math.floor(rng() * this.cards.length)];
+      const source = this.sources[Math.floor(rng() * this.sources.length)];
       
-      let pricePoint = {
-        id: uuidv4(),
+      // Recent timestamp (within last 2 hours)
+      const minutesAgo = rng() * 120;
+      const timestamp = new Date(now.getTime() - minutesAgo * 60 * 1000);
+      
+      const priceId = crypto.createHash('md5')
+        .update(`${card.id}-${source}-${timestamp.toISOString()}`)
+        .digest('hex');
+      
+      const pricePoint = {
+        id: priceId,
         card_id: card.id,
+        oracle_id: card.oracle_id,
         card_name: card.name,
         source: source,
-        price: this.generatePrice(card, source, timestamp),
+        price: this.generatePriceAtTime(card, source, timestamp),
         currency: 'USD',
         timestamp: timestamp.toISOString(),
-        volume: Math.floor(this.rng() * 100) + 1
+        volume: Math.floor(rng() * 100) + 1
       };
       
-      // 5% chance of data corruption
-      if (this.rng() < 0.05) {
-        pricePoint = this.corruptData(pricePoint);
+      // 5% corruption chance
+      const corruptRng = seedrandom(priceId);
+      if (corruptRng() < 0.05) {
+        this.corruptData(pricePoint);
       }
       
-      data.push(pricePoint);
+      prices.push(pricePoint);
     }
     
-    return data;
+    return prices.sort((a, b) => 
+      new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+    );
   }
 
-  generateBulkData(count = 50000) {
-    const data = [];
+  *generateBulkData(count = 50000) {
     const now = new Date();
     const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+    const timeRange = now.getTime() - oneYearAgo.getTime();
     
     for (let i = 0; i < count; i++) {
-      const card = this.cards[Math.floor(this.rng() * this.cards.length)];
-      const source = SOURCES[Math.floor(this.rng() * SOURCES.length)];
+      // Deterministic selection
+      const seed = `bulk-${i}`;
+      const rng = seedrandom(seed);
       
-      // Distribute timestamps across the year
-      const timeOffset = this.rng() * (now.getTime() - oneYearAgo.getTime());
+      const card = this.cards[Math.floor(rng() * this.cards.length)];
+      const source = this.sources[Math.floor(rng() * this.sources.length)];
+      
+      // Distribute across the year
+      const timeOffset = (i / count) * timeRange + (rng() * 60 * 60 * 1000);
       const timestamp = new Date(oneYearAgo.getTime() + timeOffset);
       
-      let pricePoint = {
-        id: uuidv4(),
+      const priceId = crypto.createHash('md5')
+        .update(`${card.id}-${source}-${timestamp.toISOString()}-${i}`)
+        .digest('hex');
+      
+      const pricePoint = {
+        id: priceId,
         card_id: card.id,
+        oracle_id: card.oracle_id,
         card_name: card.name,
         source: source,
-        price: this.generatePrice(card, source, timestamp),
+        price: this.generatePriceAtTime(card, source, timestamp),
         currency: 'USD',
         timestamp: timestamp.toISOString(),
-        volume: Math.floor(this.rng() * 1000) + 1
+        volume: Math.floor(rng() * 1000) + 1
       };
       
-      // 5% chance of data corruption
-      if (this.rng() < 0.05) {
-        pricePoint = this.corruptData(pricePoint);
+      // 5% corruption
+      const corruptRng = seedrandom(priceId);
+      if (corruptRng() < 0.05) {
+        this.corruptData(pricePoint);
       }
       
-      data.push(pricePoint);
+      yield pricePoint;
     }
-    
-    // Sort by timestamp for more realistic bulk data
-    data.sort((a, b) => {
-      const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-      const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-      return timeA - timeB;
-    });
-    
-    return data;
   }
 }
 

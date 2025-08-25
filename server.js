@@ -3,14 +3,22 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const compression = require('compression');
-const PriceDatabase = require('./src/database');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize database
-console.log('Initializing database...');
-const db = new PriceDatabase();
+// Initialize data generator based on environment
+let generator;
+if (process.env.DATABASE_URL) {
+  console.log('Using PostgreSQL with Prisma');
+  const DataGeneratorPrisma = require('./src/dataGeneratorPrisma');
+  generator = new DataGeneratorPrisma();
+} else {
+  console.log('Using in-memory data generator');
+  const DataGenerator = require('./src/dataGenerator');
+  generator = new DataGenerator();
+}
 
 // Middleware
 app.use(cors());
@@ -59,12 +67,22 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Stats endpoint (for debugging/monitoring)
+app.get('/stats', async (req, res) => {
+  if (generator.getStats) {
+    const stats = await generator.getStats();
+    res.json(stats || { message: 'Stats not available' });
+  } else {
+    res.json({ message: 'Stats not available for in-memory generator' });
+  }
+});
+
 // GET /feed/latest endpoint
-app.get('/feed/latest', (req, res) => {
+app.get('/feed/latest', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 100, 1000);
   
   try {
-    const prices = db.getLatestPrices(limit);
+    const prices = await generator.generateLatestPrices(limit);
     
     res.json({
       prices,
@@ -83,11 +101,8 @@ app.get('/feed/latest', (req, res) => {
 });
 
 // GET /feed/bulk endpoint with streaming
-app.get('/feed/bulk', (req, res) => {
+app.get('/feed/bulk', async (req, res) => {
   try {
-    // Get bulk data from database
-    const bulkData = db.getBulkData(50000);
-    
     // Set headers for streaming JSON
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Transfer-Encoding', 'chunked');
@@ -96,23 +111,37 @@ app.get('/feed/bulk', (req, res) => {
     res.write('{"prices":[');
     
     let isFirst = true;
-    const BATCH_SIZE = 1000;
+    let count = 0;
     
-    // Stream data in batches
-    for (let i = 0; i < bulkData.length; i += BATCH_SIZE) {
-      const batch = bulkData.slice(i, Math.min(i + BATCH_SIZE, bulkData.length));
+    if (process.env.DATABASE_URL) {
+      // Stream from database
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 365); // 1 year of data
       
-      batch.forEach(record => {
+      for await (const record of generator.generateBulkPrices(startDate, endDate)) {
         if (!isFirst) {
           res.write(',');
         }
         res.write(JSON.stringify(record));
         isFirst = false;
-      });
+        count++;
+      }
+    } else {
+      // Use in-memory generator
+      const TOTAL_RECORDS = 50000;
+      for (const record of generator.generateBulkData(TOTAL_RECORDS)) {
+        if (!isFirst) {
+          res.write(',');
+        }
+        res.write(JSON.stringify(record));
+        isFirst = false;
+        count++;
+      }
     }
     
     // Finish the JSON response
-    res.write('],"metadata":{"generated_at":"' + new Date().toISOString() + '","count":' + bulkData.length + '}}');
+    res.write('],"metadata":{"generated_at":"' + new Date().toISOString() + '","count":' + count + '}}');
     res.end();
   } catch (error) {
     console.error('Error fetching bulk feed:', error);
@@ -142,19 +171,6 @@ app.use((err, req, res, next) => {
     error: 'Internal Server Error',
     message: 'An unexpected error occurred'
   });
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing database connection');
-  db.close();
-  process.exit(0);
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINT signal received: closing database connection');
-  db.close();
-  process.exit(0);
 });
 
 // Start server

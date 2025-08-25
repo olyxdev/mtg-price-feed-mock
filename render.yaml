@@ -3,12 +3,24 @@ services:
     name: mtg-price-feed-mock
     runtime: docker
     region: frankfurt
-    plan: starter  # Required for SQLite persistent storage
+    plan: starter
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
-    disk:
-      name: mtg-data
-      mountPath: /app/data
-      sizeGB: 1  # 1GB is enough for our SQLite database
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mtg-prices-db
+          property: connectionString
+    buildCommand: |
+      npm ci --only=production
+      npx prisma generate
+      npx prisma migrate deploy
+      node prisma/seed.js
+
+databases:
+  - name: mtg-prices-db
+    databaseName: mtg_prices
+    user: mtg_user
+    region: frankfurt
+    plan: starter
