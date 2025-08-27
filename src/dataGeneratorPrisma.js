@@ -24,6 +24,7 @@ class DataGeneratorPrisma {
       });
 
       return prices.map(price => ({
+        id: price.id,
         card_id: price.cardId,
         oracle_id: price.oracleId,
         name: price.cardName,
@@ -74,6 +75,7 @@ class DataGeneratorPrisma {
 
         for (const price of prices) {
           yield {
+            id: price.id,
             card_id: price.cardId,
             oracle_id: price.oracleId,
             name: price.cardName,
@@ -121,6 +123,7 @@ class DataGeneratorPrisma {
       });
 
       return prices.map(price => ({
+        id: price.id,
         card_id: price.cardId,
         oracle_id: price.oracleId,
         name: price.cardName,
